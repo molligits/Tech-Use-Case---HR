@@ -8,6 +8,7 @@ Endpoints:
   POST /support-action  → run troubleshooting fix, return resolved true/false
   POST /slots           → return available technician appointment slots
   POST /book            → confirm appointment booking
+  POST /close-call      → post-call CRM update and ticket creation
 
 Deploy: push to GitHub, Railway auto-deploys.
 """
@@ -168,6 +169,50 @@ async def book_appointment(req: BookRequest):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# 5. CLOSE CALL — post-call CRM update and ticket creation
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class CloseCallRequest(BaseModel):
+    account_id: str = ""
+    customer_full_name: str = ""
+    issue_resolved: bool = False
+    upgrade_accepted: bool = False
+    appointment_confirmation: str = ""
+    call_summary: str = ""
+
+
+@app.post("/close-call")
+async def close_call(req: CloseCallRequest):
+    today = datetime.now().strftime("%Y%m%d")
+    ticket_id = f"TKT-{today}-{req.account_id.replace('ACC-', '')}" if req.account_id else f"TKT-{today}-00000"
+
+    fields_updated = ["support_history"]
+    next_action = "No follow-up required."
+
+    if req.issue_resolved:
+        fields_updated.append("issue_status:resolved")
+    else:
+        fields_updated.append("issue_status:escalated")
+        next_action = "Escalation ticket created. Tier 2 team notified."
+
+    if req.upgrade_accepted:
+        fields_updated.append("plan_status:upgrade_pending")
+        fields_updated.append("appointment_scheduled")
+        next_action = f"Technician dispatch confirmed. Ref: {req.appointment_confirmation}."
+    elif not req.upgrade_accepted and req.issue_resolved:
+        fields_updated.append("upgrade_pipeline:open")
+
+    return {
+        "logged": True,
+        "ticket_id": ticket_id,
+        "crm_updated": True,
+        "fields_updated": fields_updated,
+        "next_action": next_action,
+        "message": f"Call record saved. Account {req.account_id} updated.",
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # HEALTH CHECK
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -175,5 +220,5 @@ async def book_appointment(req: BookRequest):
 async def health():
     return {
         "status": "ok",
-        "endpoints": ["/lookup", "/support-action", "/slots", "/book"],
+        "endpoints": ["/lookup", "/support-action", "/slots", "/book", "/close-call"],
     }
