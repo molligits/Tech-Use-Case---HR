@@ -49,10 +49,13 @@ async def lookup_customer(req: LookupRequest):
         "verified": True,
         "account_id": "ACC-48291",
         "current_plan": "Orange Fibre Standard",
+        "current_speed": "300 Mbps",
         "monthly_cost": 29.99,
         "upgrade_eligible": True,
-        "upgrade_offer": "Orange Fibre Premium Upgrade",
+        "upgrade_offer": "Orange Fibre Premium",
+        "upgrade_speed": "2 Gbps",
         "upgrade_price_delta": 8.00,
+        "upgrade_includes": "Latest Wi-Fi 6 router, up to 2 Gbps download, priority support",
         "open_tickets": 0,
         "message": "Customer verified. Account found.",
     }
@@ -131,10 +134,13 @@ async def check_slots(req: SlotsRequest):
             slot_date += timedelta(days=1)
         hour = [9, 14, 10][i]  # morning, afternoon, morning
         slot_time = slot_date.replace(hour=hour, minute=0, second=0)
+        end_hour = hour + 2
+        am_pm = "AM" if hour < 12 else "PM"
+        end_am_pm = "AM" if end_hour < 12 else "PM"
         slots.append({
             "slot_id": f"SLOT-{i+1}",
-            "datetime": slot_time.strftime("%A %d %B, %H:%00"),
-            "window": f"{hour}:00 - {hour+2}:00",
+            "datetime": slot_time.strftime(f"%A %d %B, {hour}:{0:02d} {am_pm}"),
+            "window": f"{hour} {am_pm} to {end_hour} {end_am_pm}",
         })
 
     return {
@@ -174,9 +180,11 @@ async def book_appointment(req: BookRequest):
 
 class CloseCallRequest(BaseModel):
     account_id: str = ""
-    customer_full_name: str = ""
-    issue_resolved: bool = False
-    upgrade_accepted: bool = False
+    issue_reported: str = ""
+    issue_resolved: str = ""
+    resolution_method: str = ""
+    upgrade_offered: str = ""
+    upgrade_accepted: str = ""
     appointment_confirmation: str = ""
     call_summary: str = ""
 
@@ -189,17 +197,20 @@ async def close_call(req: CloseCallRequest):
     fields_updated = ["support_history"]
     next_action = "No follow-up required."
 
-    if req.issue_resolved:
+    is_resolved = req.issue_resolved.lower() == "true"
+    is_upgrade = req.upgrade_accepted.lower() == "true"
+
+    if is_resolved:
         fields_updated.append("issue_status:resolved")
     else:
         fields_updated.append("issue_status:escalated")
         next_action = "Escalation ticket created. Tier 2 team notified."
 
-    if req.upgrade_accepted:
+    if is_upgrade:
         fields_updated.append("plan_status:upgrade_pending")
         fields_updated.append("appointment_scheduled")
         next_action = f"Technician dispatch confirmed. Ref: {req.appointment_confirmation}."
-    elif not req.upgrade_accepted and req.issue_resolved:
+    elif not is_upgrade and is_resolved:
         fields_updated.append("upgrade_pipeline:open")
 
     return {
