@@ -135,12 +135,17 @@ async def check_slots(req: SlotsRequest):
         hour = [9, 14, 10][i]  # morning, afternoon, morning
         slot_time = slot_date.replace(hour=hour, minute=0, second=0)
         end_hour = hour + 2
+
+        # Convert to 12-hour format
+        display_hour = hour if hour <= 12 else hour - 12
+        display_end = end_hour if end_hour <= 12 else end_hour - 12
         am_pm = "AM" if hour < 12 else "PM"
         end_am_pm = "AM" if end_hour < 12 else "PM"
+
         slots.append({
             "slot_id": f"SLOT-{i+1}",
-            "datetime": slot_time.strftime(f"%A %d %B, {hour}:{0:02d} {am_pm}"),
-            "window": f"{hour} {am_pm} to {end_hour} {end_am_pm}",
+            "datetime": slot_time.strftime(f"%A %d %B, {display_hour} {am_pm}"),
+            "window": f"{display_hour} {am_pm} to {display_end} {end_am_pm}",
         })
 
     return {
